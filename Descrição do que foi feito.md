@@ -12,6 +12,6 @@ A variável palavrasUsadas é declarada como um membro estático da classe Jogo.
 
 Implementamos a sobrecarga na função Mostrar, que pode ser modificada ou expandida em subclasses, permitindo uma maior flexibilidade e customização de acordo com as necessidades específicas de cada tipo de jogo (solo ou multijogador).
 
-Herança: A classe Jogo serve como uma classe base para as subclasses JogoSolo e Multijogador. Esta abordagem de herança permite reutilizar e estender funcionalidades da classe base, ao mesmo tempo em que se implementam comportamentos específicos nas subclasses.
+A classe Jogo serve como uma classe base para as subclasses JogoSolo e Multijogador. Esta abordagem de herança permite reutilizar e estender funcionalidades da classe base, ao mesmo tempo em que se implementam comportamentos específicos nas subclasses.
 
 Este trabalho exemplifica a aplicação de conceitos avançados de C++ de forma prática, abordando desde a estruturação de classes e herança até a gestão de recursos, crucial em aplicações modernas de software.
