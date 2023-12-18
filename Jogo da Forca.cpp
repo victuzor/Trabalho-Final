@@ -15,7 +15,8 @@ protected:
     std::string displayWord;
     int maxErrors;
     int errors;
-    std::string usedLetters;
+    char* usedLetters; // Ponteiro para um array dinâmico
+    int usedLettersCapacity; // Tamanho atual do array
     std::string theme;
 
     void loadWords(std::string filename) {
@@ -70,13 +71,16 @@ protected:
     }
 
 public:
-    Game(std::string filename) {
+    Game(std::string filename) : usedLettersCapacity(10) {
         loadWords(filename);
         srand(time(NULL));
+        usedLetters = new char[usedLettersCapacity]; // Alocando memória
+        usedLetters[0] = '\0'; // Inicializar com string vazia
     }
 
-    virtual void play() = 0;
-};
+    virtual ~Game() {
+        delete[] usedLetters; // Liberando memória alocada
+    }
 
 // Classe SoloGame
 class SoloGame : public Game {
