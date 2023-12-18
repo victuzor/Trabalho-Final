@@ -6,6 +6,8 @@
 #include <ctime>
 #include <cstdlib>
 #include <algorithm>
+#include <cstring>
+#include <set>
 
 // Classe Base
 class Game {
@@ -18,6 +20,8 @@ protected:
     char* usedLetters; // Ponteiro para um array dinâmico
     int usedLettersCapacity; // Tamanho atual do array
     std::string theme;
+
+    static std::set<std::string> usedWords; // Armazena palavras já utilizadas
 
     void loadWords(std::string filename) {
         std::ifstream file(filename);
@@ -43,20 +47,25 @@ protected:
     }
 
     void chooseWord() {
-        int themeIndex = rand() % wordBank.size();
-        auto it = wordBank.begin();
-        std::advance(it, themeIndex);
-        theme = it->first;
-        const std::vector<std::string>& words = it->second;
-        currentWord = words[rand() % words.size()];
+        do {
+            int themeIndex = rand() % wordBank.size();
+            auto it = wordBank.begin();
+            std::advance(it, themeIndex);
+            theme = it->first;
+            const std::vector<std::string>& words = it->second;
+            currentWord = words[rand() % words.size()];
+        } while (usedWords.find(currentWord) != usedWords.end()); // Verifica se a palavra já foi usada
+
+        usedWords.insert(currentWord); // Adiciona a palavra atual ao conjunto de usadas
+
         displayWord = "";
         for (char c : currentWord) {
-            displayWord += (c == ' ' ? "  " : "_ ");  // Adiciona espaço para cada letra e dois espaços para espaços
+            displayWord += (c == ' ' ? "  " : "_ ");
         }
-        displayWord.pop_back(); // Remove o último espaço extra
+        displayWord.pop_back();
     }
 
-    void displayState() {
+    void displayState(int CurrentPlayerErrors) { 
         std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
         std::cout << "Tema: " << theme << std::endl;
         std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
@@ -65,9 +74,14 @@ protected:
             std::cout << c;  // Imprime a palavra com espaços
         }
         std::cout << std::endl;
-        std::cout << "Erros: " << errors << " de " << maxErrors << std::endl;
+        std::cout << "Erros: " << CurrentPlayerErrors << " de " << maxErrors << std::endl;
         std::cout << "Letras utilizadas: " << usedLetters << std::endl;
         std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+    }
+
+    // Método para verificar se o caractere é uma letra válida de A a Z
+    bool isValidLetter(char letter) {
+        return letter >= 'A' && letter <= 'Z';
     }
 
 public:
@@ -77,10 +91,17 @@ public:
         usedLetters = new char[usedLettersCapacity]; // Alocando memória
         usedLetters[0] = '\0'; // Inicializar com string vazia
     }
+    virtual void play() = 0;
 
     virtual ~Game() {
         delete[] usedLetters; // Liberando memória alocada
     }
+
+    
+};
+
+std::set<std::string> Game::usedWords;
+
 
 // Classe SoloGame
 class SoloGame : public Game {
@@ -94,124 +115,149 @@ public:
         bool playAgain = true;
         while (playAgain) {
             errors = 0;
-            usedLetters = "";
+            usedLetters[0] = '\0'; // Reinicializa o array
             chooseWord();  // Escolhe uma nova palavra e tema
-            while (errors < maxErrors && displayWord.find('_') != std::string::npos) { // Verifica se ainda há underlines
-                displayState();
+            while (errors < maxErrors && displayWord.find('_') != std::string::npos) {
+                displayState(errors);
                 char guess;
                 std::cout << "Escolha uma letra: ";
                 std::cin >> guess;
-                guess = toupper(guess); // Converter para maiúscula
+                guess = toupper(guess);
 
-                if (usedLetters.find(guess) != std::string::npos) {
+                if (!isValidLetter(guess)) {
+                std::cout << "Entrada inválida. Por favor, insira uma letra de A a Z.\n";
+                continue;
+                }
+
+                if (std::string(usedLetters).find(guess) != std::string::npos) {
                     std::cout << "Letra já utilizada. Tente outra.\n";
                     continue;
                 }
-                usedLetters += guess;
-                 if (currentWord.find(guess) != std::string::npos) {
-                    for (size_t i = 0; i < currentWord.size(); i++) {
-                        if (currentWord[i] == guess) {
-                            displayWord[i * 2] = guess; // Multiplica por 2 para ajustar a posição
-                        }
-                    }
-                } else {
-                    errors++;
+
+                size_t len = strlen(usedLetters);
+                if (len >= usedLettersCapacity - 1) {
+                    usedLettersCapacity *= 2;
+                    char* temp = new char[usedLettersCapacity];
+                    strcpy(temp, usedLetters);
+                    delete[] usedLetters;
+                    usedLetters = temp;
                 }
+
+                usedLetters[len] = guess;
+                usedLetters[len + 1] = '\0';
+
+                bool found = false;
+                for (size_t i = 0; i < currentWord.size(); i++) {
+                    if (currentWord[i] == guess) {
+                        displayWord[i * 2] = guess;
+                        found = true;
+                    }
+                }
+
+                if (!found) errors++;
             }
-            displayState();
+
+            displayState(errors);
             if (displayWord.find('_') == std::string::npos) {
                 std::cout << "Parabéns! Você acertou a palavra: " << currentWord << std::endl;
                 score++;
             } else {
                 std::cout << "Você perdeu. A palavra era: " << currentWord << std::endl;
             }
+
             std::cout << "Deseja jogar novamente? (S/N): ";
             char response;
             std::cin >> response;
             playAgain = (toupper(response) == 'S');
         }
+
         std::cout << "Total de vitórias nesta sessão: " << score << std::endl;
     }
 };
 
+// Classe MultiplayerGame
 class MultiplayerGame : public Game {
 public:
     MultiplayerGame(std::string filename) : Game(filename) {
         maxErrors = 6;
     }
 
- void play() override {
-    std::string players[2];
-    int scores[2] = {0, 0};
-    int errorsPerPlayer[2] = {0, 0}; // Erros individuais dos jogadores
-    std::cout << "Nome do Jogador 1: ";
-    std::cin >> players[0];
-    std::cout << "Nome do Jogador 2: ";
-    std::cin >> players[1];
+    void play() override {
+        std::string players[2];
+        int scores[2] = {0, 0};
+        int errorsPerPlayer[2] = {0, 0};
+        std::cout << "Nome do Jogador 1: ";
+        std::cin >> players[0];
+        std::cout << "Nome do Jogador 2: ";
+        std::cin >> players[1];
 
-    bool playAgain = true;
-    while (playAgain) {
-        int currentPlayer = 0;
-        errorsPerPlayer[0] = errorsPerPlayer[1] = 0; // Reiniciar contagem de erros
-        usedLetters = "";
-        chooseWord();
+        bool playAgain = true;
+        while (playAgain) {
+            int currentPlayer = 0;
+            errorsPerPlayer[0] = errorsPerPlayer[1] = 0;
+            usedLetters[0] = '\0'; // Reinicializa o array
+            chooseWord();
 
-        while (errorsPerPlayer[0] < maxErrors && errorsPerPlayer[1] < maxErrors &&
-               displayWord.find('_') != std::string::npos) {
-            std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-            std::cout << "Tema: " << theme << std::endl;
-            std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
-            std::cout << "Palavra: ";
-            for (char c : displayWord) {
-                std::cout << c;
-            }
-            std::cout << std::endl;
-            std::cout << "Erros de " << players[currentPlayer] << ": " << errorsPerPlayer[currentPlayer] << " de " << maxErrors << std::endl;
-            std::cout << "Letras utilizadas: " << usedLetters << std::endl;
-            std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
+            while (errorsPerPlayer[0] < maxErrors && errorsPerPlayer[1] < maxErrors &&
+                   displayWord.find('_') != std::string::npos) {
+                displayState(errorsPerPlayer[currentPlayer]);
+                std::cout << "Turno de " << players[currentPlayer] << std::endl;
+                char guess;
+                std::cout << "Escolha uma letra: ";
+                std::cin >> guess;
+                guess = toupper(guess);
 
-            char guess;
-            std::cout << "Turno de " << players[currentPlayer] << std::endl;
-            std::cout << "Escolha uma letra: ";
-            std::cin >> guess;
-            guess = toupper(guess);
+                if (!isValidLetter(guess)) {
+                std::cout << "Entrada inválida. Por favor, insira uma letra de A a Z.\n";
+                continue;
+                }
 
-            if (usedLetters.find(guess) == std::string::npos) {
-            if (!usedLetters.empty()) {
-            usedLetters += "-"; // Adicionar um separador
-            }
-            usedLetters += guess;
-            }
+                if (std::string(usedLetters).find(guess) == std::string::npos) {
+                    size_t len = strlen(usedLetters);
+                    if (len >= usedLettersCapacity - 1) {
+                        usedLettersCapacity *= 2;
+                        char* temp = new char[usedLettersCapacity];
+                        strcpy(temp, usedLetters);
+                        delete[] usedLetters;
+                        usedLetters = temp;
+                    }
 
-            if (currentWord.find(guess) != std::string::npos) {
+                    usedLetters[len] = guess;
+                    usedLetters[len + 1] = '\0';
+                }
+
+                bool found = false;
                 for (size_t i = 0; i < currentWord.size(); i++) {
                     if (currentWord[i] == guess) {
-                        displayWord[i * 2] = guess; // Ajusta a posição
+                        displayWord[i * 2] = guess;
+                        found = true;
                     }
                 }
-            } else {
-                errorsPerPlayer[currentPlayer]++;
+
+                if (!found) {
+                    errorsPerPlayer[currentPlayer]++;
+                }
+
+                currentPlayer = (currentPlayer + 1) % 2;
             }
 
-            currentPlayer = (currentPlayer + 1) % 2; // Alterna o jogador
-        }
+            displayState(errorsPerPlayer[currentPlayer]);
+            if (displayWord.find('_') == std::string::npos) {
+                int winningPlayer = (currentPlayer + 1) % 2;
+                std::cout << "Parabéns, " << players[winningPlayer] << "! Você acertou a palavra: " << currentWord << std::endl;
+                scores[winningPlayer]++;
+            } else {
+                std::cout << "Nenhum jogador acertou. A palavra era: " << currentWord << std::endl;
+            }
 
-        if (displayWord.find('_') == std::string::npos) {
-            int winningPlayer = (currentPlayer + 1) % 2; // Determina o vencedor
-            std::cout << "Parabéns, " << players[winningPlayer] << "! Você acertou a palavra: " << currentWord << std::endl;
-            scores[winningPlayer]++;
-        } else {
-            std::cout << "Nenhum jogador acertou. A palavra era: " << currentWord << std::endl;
+            std::cout << "Placar: " << players[0] << " " << scores[0] << ", " << players[1] << " " << scores[1] << std::endl;
+            std::cout << "Deseja jogar novamente? (S/N): ";
+            char response;
+            std::cin >> response;
+            playAgain = (toupper(response) == 'S');
         }
-        std::cout << "Placar: " << players[0] << " " << scores[0] << ", " << players[1] << " " << scores[1] << std::endl;
-        std::cout << "Deseja jogar novamente? (S/N): ";
-        char response;
-        std::cin >> response;
-        playAgain = (toupper(response) == 'S');
     }
-}
 };
-
 
 int main() {
     std::cout << "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" << std::endl;
